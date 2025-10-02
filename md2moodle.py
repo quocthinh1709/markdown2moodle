@@ -37,6 +37,12 @@ import random
 import json
 import base64
 from markdown import markdown
+import webbrowser
+
+import tkinter as tk
+from tkinter import ttk
+import tkinter.filedialog
+import pathlib
 
 # To prettify xml
 import xml.dom.minidom
@@ -46,6 +52,12 @@ if sys.version_info[0] == 3:
     from urllib.request import urlopen
 else:
     from urllib import urlopen
+
+
+checkbox_table_border_state = True
+checkbox_suffer_state = True
+answer_numbering_value = 'none'
+error_message = None
 
 ######################################################################
 # Section 0 - Global constants
@@ -59,7 +71,7 @@ CONFIG = {
     'table_border' : False,
     
     # quiz answer numbering | allowed values: 'none', 'abc', 'ABCD' or '123'
-    'answer_numbering' : 'abc', 
+    'answer_numbering' : 'none', 
     # quiz shuffle answers | 1 -> true ; 0 -> false
     'shuffle_answers' : '1',
 
@@ -88,7 +100,6 @@ HEADER_PATTERN = re.compile(r'^\s*# (.*)$')
 QUESTION_PATTERN = re.compile(r'^(\s*)\*(\s)(.*)$')
 CORRECT_ANSWER_PATTERN = re.compile(r'^(\s*)-(\s)!(.*)$')
 WRONG_ANSWER_PATTERN = re.compile(r'^(\s*)-(\s)(.*)$')
-FEEDBACK_PATTERN = re.compile(r'^(\s*)>(.*)$')
 SWITCH_PRE_TAG_PATTERN = re.compile(r'^```.*$')
 EMPTY_LINE_PATTERN = re.compile(r'^\s*$')
 IMAGE_PATTERN = re.compile(r'!\[.*\]\((.+)\)')
@@ -106,7 +117,344 @@ SINGLE_DOLLAR_LATEX_PATTERN = re.compile(r'\$(.+?)\$')
 DOUBLE_DOLLAR_LATEX_PATTERN = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
 BLOCKCODE_PATTERN = re.compile(r'^(\s*)```(.*)$')
 
-TABLE_PATTERN = re.compile(r'\[\[\[(.*)\n([\s\S]+?)\]\]\]', re.MULTILINE)
+TABLE_PATTERN = re.compile(r'\[\[\[(.*)\n([\s\S]+?)\]\]\]', re.MULTILINE )
+
+
+
+LIGHT_BG = "#ECF0F3"
+BUTTON_BG = "#3688D0"
+TEXT_FG = "#2272B7"
+icon_path = f"D:\VSCode\Text2QTI\QTIIcon.ico"
+
+def main():
+    
+    file_name = ''
+    global checkbox_table_border_state
+    global checkbox_suffer_state
+
+    window = tk.Tk()
+    window.configure(bg=LIGHT_BG)
+    window.title('Convert Markdown to Moodle XML')
+    #window.geometry("800x600")
+    window.minsize(width=800, height=600)
+    window.maxsize(width=800, height=600)
+    window.iconbitmap(icon_path)
+    # Bring window to front and put in focus
+    window.iconify()
+    #window.update()
+    window.deiconify()
+
+    # Window grid setup
+    current_row = 0
+    column_count = 4
+
+
+    header_label = tk.Label(
+        window,
+        #text='Convert Markdown to Moodle XML',
+        text='Chuyển đổi định dạng Markdown sang Moodle XML',
+        font=(None, 20),
+        fg = TEXT_FG,
+        bg = LIGHT_BG,
+        highlightthickness=0
+    )
+    header_label.grid(
+        row=current_row, column=0, columnspan=column_count, padx=(30, 30), pady=(30, 10),
+        sticky='nsew',
+    )
+    current_row += 1
+    header_link_label = tk.Label(
+        window,
+        text='Github',
+        font=(None, 10), fg='blue', cursor='hand2',
+        bg= LIGHT_BG,
+        highlightthickness=0
+    )
+    header_link_label.bind('<Button-1>', lambda x: webbrowser.open_new('https://github.com/brunomnsilva/markdown2moodle'))
+    header_link_label.grid(
+        row=current_row, column=0, columnspan=column_count, padx=(30, 30),
+        sticky='nsew',
+    )
+    current_row += 1
+    last_dir = None
+    def browse_files():
+        nonlocal file_name
+        nonlocal last_dir
+        if last_dir is None:
+            initialdir = pathlib.Path('~').expanduser()
+        else:
+            initialdir = last_dir
+        file_name = tkinter.filedialog.askopenfilename(
+            initialdir=initialdir,
+            title='Select a quiz file',
+            filetypes=[('Quiz files', '*.md;*.txt')],
+        )
+        if file_name:
+            if last_dir is None:
+                last_dir = pathlib.Path(file_name).parent
+            file_browser_button.config(text=f'"{os.path.basename(file_name)}"', fg='white')
+        else:
+            file_browser_button.config(text=f'<none selected>', fg='red')
+
+    file_browser_button = tk.Button(
+        window,
+        text='Chọn file (md/txt)',
+        fg='white',
+        bg = BUTTON_BG,
+        font=(None, 14),
+        width=50,
+        command=browse_files,
+    )
+    file_browser_button.grid(
+        row=current_row, column=0, columnspan= 4, padx=(50, 50), pady=(10, 20),
+        sticky='nsew',
+    )
+
+    current_row += 1
+    config_frame = tk.Frame(
+        window,
+        width=100, height=50,
+        borderwidth=0, relief='sunken', bg='white',
+    )
+    config_frame.grid(
+        row=current_row, column=0, columnspan=column_count, padx=(50, 50), pady=(10, 10),
+        sticky='nsew',
+    )
+
+    # Tạo một biến để lưu trạng thái của ô kiểm
+    checkbox_suffer_state = tk.BooleanVar()
+    
+    checkbox_suffer_state.set(True)  # Đặt giá trị mặc định của ô kiểm là True (được chọn)
+
+    # Tạo ô kiểm
+    checkbox_suffer = tk.Checkbutton(config_frame, text="Đảo thứ tự đáp án", 
+                              variable=checkbox_suffer_state,
+                              bg = 'white',
+                              fg = TEXT_FG) 
+    #checkbox.pack(pady=10)
+    checkbox_suffer.grid(
+        row=0, column = 0, padx=(30, 30),
+        sticky='nsew',
+    )
+
+    checkbox_table_border_state = tk.BooleanVar()
+    
+    checkbox_table_border_state.set(True)  # Đặt giá trị mặc định của ô kiểm là True (được chọn)
+
+    # Tạo ô kiểm
+    checkbox_table_border = tk.Checkbutton(config_frame, text="Định dạng viền cho bảng", 
+                              variable=checkbox_table_border_state,
+                              bg = 'white',
+                              anchor='w',
+                              fg = TEXT_FG) 
+    #checkbox.pack(pady=10)
+    checkbox_table_border.grid(
+        row=0, column = 1, padx=(30, 30),
+        sticky='nsew',
+    )
+    list_type_label = tk.Label(
+        config_frame,
+        text=f'Kiểu đánh đáp án',
+        fg = TEXT_FG,
+        bg = 'white',
+        highlightthickness=0
+    )
+    list_type_label.grid(
+        row=1, column=0, padx=(30, 30), pady=(5, 5),
+        sticky='nsew',
+    )
+
+    # Tạo một danh sách các lựa chọn cho combobox
+    options = ['abc', 'ABCD', '123', 'none']
+    # Tạo combobox
+    combo_box = ttk.Combobox(config_frame, values=options)
+    combo_box.grid(
+        row=1, column = 1, padx=(35, 30), pady=(5, 5),
+        sticky='nsew',
+    )
+    combo_box.configure(foreground=TEXT_FG) 
+    #combo_box.pack(pady=10)
+
+    # Đặt giá trị mặc định cho combobox
+    combo_box.set(options[3])
+
+    # Hàm được gọi khi người dùng thay đổi giá trị của combobox
+    def on_combobox_change(event):
+        global answer_numbering_value
+        answer_numbering_value = combo_box.get()
+        #print("Đã chọn:", answer_numbering_value)
+
+    combo_box.bind("<<ComboboxSelected>>", on_combobox_change)
+
+    current_row += 1
+    def run():
+        global CONFIG
+        suffer_char = '1'
+        if(checkbox_suffer_state):
+            suffer_char = '1'
+        else:
+            suffer_char = '0'
+        CONFIG = {
+        # Produce debugging information while parsing
+        'debug' : False,
+
+        # Place table borders through css style?
+        'table_border' : checkbox_table_border_state,
+        
+        # quiz answer numbering | allowed values: 'none', 'abc', 'ABCD' or '123'
+        'answer_numbering' : answer_numbering_value, 
+        # quiz shuffle answers | 1 -> true ; 0 -> false
+        'shuffle_answers' : suffer_char,
+
+        # in single answer questions, the penalty to apply to a wrong answer in % [0,1]
+        'single_answer_penalty_weight' : 0, #e.g., 0.25 = 25% 
+
+        # pygments code snapshot generator
+        'pygments.font_size' : 16,
+        'pygments.line_numbers' : False,
+
+        # pygments code snapshot | additional dump to disk of generated images
+        'pygments.dump_image' : False,
+        'pygments.dump_image_id' : 1, #e,g, 1.png and incremented for each image
+        }
+
+
+
+
+        run_message_text.delete(1.0, tk.END)
+        run_message_text['fg'] = 'gray'
+        run_message_text.insert(tk.INSERT, 'Starting...')
+        run_message_text.update()
+
+        global error_message #= None
+
+        if not file_name:
+            error_message = 'Must select a quiz file'
+            run_message_text.delete(1.0, tk.END)
+            run_message_text.insert(tk.INSERT, error_message)
+            run_message_text['fg'] = 'red'
+            return
+
+        file_path = pathlib.Path(file_name)
+        try:
+            with open(file_path, "r", encoding="utf-8-sig") as file:
+                text = file.read()
+            #print(text)
+        except FileNotFoundError:
+            #error_message = f'File "{file_path}" does not exist.'
+            error_message = f'File "{file_path}" không tồn tại.'
+        except PermissionError as e:
+            #error_message = f'File "{file_path}" cannot be read due to permission error. Technical details:\n\n{e}'
+            error_message = f'File "{file_path}" không đọc được do không có quyền. Chi tiết:\n\n{e}'
+        except UnicodeDecodeError as e:
+            #error_message = f'File "{file_path}" is not encoded in valid UTF-8. Technical details:\n\n{e}'
+            error_message = f'File "{file_path}" không đúng mã hóa UTF-8. Chi tiết:\n\n{e}'
+        except Exception as e:
+            #error_message = f'An error occurred in reading the quiz file. Technical details:\n\n{e}'
+            error_message = f'Lỗi đọc file quiz. Chi tiết:\n\n{e}'
+        if error_message:
+            run_message_text.delete(1.0, tk.END)
+            run_message_text.insert(tk.INSERT, error_message)
+            run_message_text['fg'] = 'red'
+            return
+        cwd = pathlib.Path.cwd()
+        os.chdir(file_path.parent)
+        try:
+
+            #md_file_name = sys.argv[1]
+
+            #md_file = open(md_file_name, 'r')
+            #md_script = md_file.read()
+
+            quiz = parse_file(text)
+            
+
+            if quiz:
+                quiz.export_xml_to_file(file_name)
+                #print("XML file(s) successfully generated!")
+        except TransitionError as e:
+            #error_message = f'Expecting answer, question or header: {e}'
+            error_message = f'Cần một câu trả lời, câu hỏi hoặc tiêu đề: {e}'
+        except QuizError as e:
+            #error_message = f'Quiz error: {e}'
+            error_message = f'Quiz lỗi: {e}'
+        except Exception as e:
+            #error_message = f'Quiz creation failed unexpectedly. Technical details:\n\n{e}'
+            error_message = f'Tạo quiz lỗi. Chi tiết:\n\n{e}'
+        finally:
+            os.chdir(cwd)
+
+        if error_message != None:
+            run_message_text.delete(1.0, tk.END)
+            run_message_text.insert(tk.INSERT, error_message)
+            run_message_text['fg'] = 'red'
+        else:
+            run_message_text.delete(1.0, tk.END)
+            #run_message_text.insert(tk.INSERT, f'Completed! Moodle XML file(s) was created in "{file_path.parent.as_posix()}"')
+            run_message_text.insert(tk.INSERT, f'Hoàn thành chuyển đổi sang định dạng Moodle XML. Xem trong thư mục "{file_path.parent.as_posix()}"')
+            run_message_text['fg'] = TEXT_FG
+    run_button = tk.Button(
+        window,
+        text='Convert',
+        font=(None, 14),
+        bg = BUTTON_BG,
+        fg = 'white',
+        command=run,
+    )
+    run_button.grid(
+        row=current_row, column=0, columnspan=4, padx=(50, 50), pady=(10, 30),
+        sticky='nsew',
+    )
+    current_row += 1
+
+
+    run_message_label = tk.Label(
+        window,
+        text='Kết quả:',
+        #relief='ridge',
+        width=100,
+        fg = TEXT_FG,
+        bg= LIGHT_BG,
+        anchor='w'
+    )
+    run_message_label.grid(
+        row=current_row, column=0, columnspan=column_count, padx=(50, 50), pady=(0, 0),
+        sticky='nsew',
+    )
+    current_row += 1
+
+
+    run_message_frame = tk.Frame(
+        window,
+        width=100, height=10,
+        borderwidth=1, relief='sunken', bg='white',
+    )
+    run_message_frame.grid(
+        row=current_row, column=0, columnspan=column_count, padx=(50, 50), pady=(10, 10),
+        sticky='nsew',
+    )
+    
+    run_message_scrollbar = tk.Scrollbar(run_message_frame)
+    run_message_scrollbar.pack(
+        side='right', fill='y',
+    )
+    
+    run_message_text = tk.Text(
+        run_message_frame,
+        height=10, borderwidth=0, highlightthickness=0,
+        wrap='word',
+        yscrollcommand=run_message_scrollbar.set,
+    )
+    run_message_text.insert(tk.INSERT, '')
+    run_message_text['fg'] = 'gray'
+    #run_message_scrollbar.config(command=run_message_text.yview)
+    run_message_text.pack(
+        side='left', fill='both', expand=False,
+        padx=(5, 5), pady=(5, 5),
+    )
+
+
+    window.mainloop()
 
 ##
 # Regex helpers
@@ -122,9 +470,6 @@ def is_answer(string):
 
 def is_correct_answer(string):
     return False if get_correct_answer(string) is None else True
-
-def is_feedback(string):
-    return False if get_answer_feedback(string) is None else True 
 
 def is_wrong_answer(string):
     return False if get_wrong_answer(string) is None else True
@@ -153,6 +498,7 @@ def get_question(string):
         return match.group(3)
     return None
 
+
 def get_correct_answer(string):
     match = re.match(CORRECT_ANSWER_PATTERN, string)
     if match:
@@ -164,12 +510,6 @@ def get_wrong_answer(string):
     match = re.match(WRONG_ANSWER_PATTERN, string)
     if match:
         return match.group(3)
-    return None
-
-def get_answer_feedback(string):
-    match = re.match(FEEDBACK_PATTERN, string)
-    if match:
-        return match.group(2)
     return None
 
 ##
@@ -195,18 +535,16 @@ def render_answer(text):
     """Replaces any allowed contents, e.g., text, inline code and formulas
      and returns the CDATA content."""
 
-    text = re.sub(SINGLE_LINE_CODE_PATTERN, replace_single_line_code, text)
-    text = re.sub(SINGLE_DOLLAR_LATEX_PATTERN, replace_latex, text)
+    text = re.sub(SINGLE_LINE_CODE_PATTERN, replace_single_line_code, text)#Thinh
+    text = re.sub(SINGLE_DOLLAR_LATEX_PATTERN, replace_latex, text)#Thinh
 
     return wrap_cdata( markdown( text ) ) 
-
-# TODO: render feedback
 
 def render_question(text, md_dir_path):
     """Replaces any allowed contents, e.g., code and images
      and returns the CDATA content."""
 
-    text = re.sub(MULTI_LINE_CODE_PATTERN, replace_multi_line_code, text)
+    text = re.sub(MULTI_LINE_CODE_PATTERN, replace_multi_line_code, text) #Thinh
     text = re.sub(SINGLE_LINE_CODE_PATTERN, replace_single_line_code, text)
     text = re.sub(IMAGE_PATTERN, replace_image_wrapper(md_dir_path), text)
     text = re.sub(DOUBLE_DOLLAR_LATEX_PATTERN, replace_latex_double_dollars, text)
@@ -386,9 +724,7 @@ class Quiz(dict):
     def append_to_question(self, line): 
         """Appends content to current question."""
 
-        #TODO: there's a problem enforcing line breaks in the output?
-        # Maybe we should instead inform the user of the correct markdown
-        # sintax, i.e., place two spaces to enforce a line break.
+        #TODO: there's a problem enforcing line breaks in the output
         self.current_question['text'] += line + '\n'
 
     def consume_answer(self, line):
@@ -398,8 +734,7 @@ class Quiz(dict):
 
             current_answer = {
                 'text': get_correct_answer(line),
-                'correct': True,
-                'feedback': None
+                'correct': True
                 }
             
             self.current_question['answers'].append(current_answer)
@@ -408,8 +743,7 @@ class Quiz(dict):
 
             current_answer = {
                 'text': get_wrong_answer(line),
-                'correct': False,
-                'feedback': None
+                'correct': False
                 }
             
             self.current_question['answers'].append(current_answer)
@@ -417,11 +751,6 @@ class Quiz(dict):
         else:
             #some other content, ignore.
             pass
-
-    def consume_feedback(self, line):
-        cur_answer = self.current_question['answers'][-1]
-        cur_answer['feedback'] = get_answer_feedback(line)
-
 
     def current_question_has_correct_answers(self):
         correct_answers = [x for x in self.current_question['answers'] if x['correct']]
@@ -462,7 +791,7 @@ class Quiz(dict):
         """Produces the XML file outputs; one for each specified category in the md file."""
         if self.is_valid:            
             md_dir_path = os.path.dirname(os.path.abspath(md_file_name))
-
+            '''
             for section_caption in self:
                 section = self[section_caption]
                 xml_file = open(create_output_filename(md_file_name, section_caption), 'w')
@@ -472,9 +801,21 @@ class Quiz(dict):
                 xml_file.write(tmp.toprettyxml())
 
                 # xml_file.write(section_to_xml(section_caption, section, md_dir_path))
+            '''
+            import xml.dom.minidom
+
+            for section_caption in self:
+                section = self[section_caption]
+                output_filename = create_output_filename(md_file_name, section_caption)
+                with open(output_filename, 'w', encoding='utf-8') as xml_file:
+                    # Prettify xml
+                    tmp = xml.dom.minidom.parseString(section_to_xml(section_caption, section, md_dir_path))
+                    xml_file.write(tmp.toprettyxml())
 
         else:
-            print("Quiz is not marked as valid for export.")
+            #print("Quiz is not marked as valid for export.")
+            #raise Exception("Quiz is not marked as valid for export.")
+            raise Exception("Quiz không hợp lệ để tạo")
 
     def export_xml_to_string(self, md_file_name):
         """Produces the XML output and returns the resulting text."""
@@ -486,7 +827,9 @@ class Quiz(dict):
                 result[section_caption] = section_to_xml(section_caption, section, md_dir_path)
             return json.dumps(result, indent=2)
         else:
-            print("Quiz is not marked as valid for export.")
+            #print("Quiz is not marked as valid for export.")
+            #raise Exception("Quiz is not marked as valid for export.")
+            raise Exception("Quiz không hợp lệ để tạo")
             return ""
         
         
@@ -538,14 +881,16 @@ def question_to_xml(question, index, md_dir_path):
     #convert question text to CDATA html
     rendered_question_text = render_question(question['text'], md_dir_path)
 
-    index_part = str(index + 1).rjust(4, '0')
+    #index_part = str(index + 1).rjust(4, '0')
+    index_part = str(index + 1).rjust(3, '0')
     q_part = (question['text'] + str(random.random())).encode('utf-8')
     question_single_status = ('true' if question['single'] else 'false')
     
     xml = '<question type="multichoice">'
     # question name
     xml += '<name><text>'
-    xml += index_part + hashlib.md5(q_part).hexdigest()
+    #xml += index_part + hashlib.md5(q_part).hexdigest()
+    xml += 'Question '+ index_part + '_'+ hashlib.md5(q_part).hexdigest()
     xml += '</text></name>'
     # question text
     xml += '<questiontext format="html"><text>'
@@ -573,13 +918,6 @@ def answer_to_xml(answer):
 
     xml = '<answer fraction="'+str(answer['weight'])+'">'
     xml += '<text>'+text+'</text>'
-    
-    if answer['feedback']:
-        # we allow formulas and tex in the feedback, so
-        # use the existing answer rendering function
-        feedback = render_answer( answer['feedback'] )
-        xml += '<feedback><text>'+feedback+'</text></feedback>'
-
     xml += '</answer>'
     return xml
 
@@ -665,7 +1003,8 @@ def state_start(quiz, line_text, line_number):
         quiz.consume_question(line_text)
         state = "parse_question"
     else:
-        raise TransitionError("Expecting a header or a question")
+        #raise TransitionError("Expecting a header or a question")
+        raise TransitionError("Cần một tiêu đề hoặc một câu hỏi")
 
     return state
 
@@ -678,7 +1017,8 @@ def state_parse_header(quiz, line_text, line_number):
         quiz.consume_question(line_text)
         state = "parse_question"
     else:
-        raise TransitionError("Expecting a question")
+        #raise TransitionError("Expecting a question")
+        raise TransitionError("Cần một câu hỏi")
 
     return state
 
@@ -693,9 +1033,9 @@ def state_parse_question(quiz, line_text, line_number):
     elif is_answer(line_text):
         quiz.consume_answer(line_text)
         state = "parse_answer"
-    elif is_header(line_text) or is_question(line_text) \
-                or is_feedback(line_text) or is_eof(line_text):
-        raise TransitionError("Expecting text, codeblock or answer")
+    elif is_header(line_text) or is_question(line_text) or is_eof(line_text):
+        #raise TransitionError("Expecting text, codeblock or answer")
+        raise TransitionError("Cần text, code công thức hoặc câu trả lời")
     else:
         quiz.append_to_question(line_text)
         state  = "parse_question"
@@ -707,7 +1047,8 @@ def state_parse_question_codeblock(quiz, line_text, line_number):
 
     # In a codeblock we accept everything until it closes
     if is_eof(line_text):
-        raise TransitionError("Expecting closing codeblock")
+        #raise TransitionError("Expecting closing codeblock")
+        raise TransitionError("Cần ký tự đóng code công thức")
     elif is_blockcode(line_text):
         quiz.append_to_question(line_text)
         state = "parse_question"
@@ -725,61 +1066,31 @@ def state_parse_answer(quiz, line_text, line_number):
     elif is_answer(line_text):
         quiz.consume_answer(line_text)
         state = "parse_answer"
-    elif is_feedback(line_text):
-        quiz.consume_feedback(line_text)
-        state = "parse_feedback"
     elif is_question(line_text):
         if quiz.current_question_has_correct_answers():
             quiz.consume_question(line_text)
             state = "parse_question"
         else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
+            #raise TransitionError("Expecting at least one correct answer in previous question")
+            raise TransitionError("Cần ít nhất một đáp án đúng trong câu hỏi trước")
     elif is_header(line_text):
         if quiz.current_question_has_correct_answers():
             quiz.consume_header(line_text)
             state = "parse_header"
         else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
+            #raise TransitionError("Expecting at least one correct answer in previous question")
+            raise TransitionError("Cần ít nhất một đáp án đúng trong câu hỏi trước")
     elif is_eof(line_text):
         if quiz.current_question_has_correct_answers():
             # mark as valid and go to end state
             quiz.validate()
             state = "end"
         else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
+            #raise TransitionError("Expecting at least one correct answer in previous question")
+            raise TransitionError("Cần ít nhất một đáp án đúng trong câu hỏi trước")
     else:
-        raise TransitionError("Expecting answer, question or header")
-
-    return state
-
-def state_feedback(quiz, line_text, line_number):
-    if is_blank(line_text):
-        # do nothing
-        state = "parse_feedback"    
-    elif is_answer(line_text):
-        quiz.consume_answer(line_text)
-        state = "parse_answer"
-    elif is_question(line_text):
-        if quiz.current_question_has_correct_answers():
-            quiz.consume_question(line_text)
-            state = "parse_question"
-        else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
-    elif is_header(line_text):
-        if quiz.current_question_has_correct_answers():
-            quiz.consume_header(line_text)
-            state = "parse_header"
-        else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
-    elif is_eof(line_text):
-        if quiz.current_question_has_correct_answers():
-            # mark as valid and go to end state
-            quiz.validate()
-            state = "end"
-        else:
-            raise TransitionError("Expecting at least one correct answer in previous question")
-    else:
-        raise TransitionError("Expecting answer, question or header")
+        #raise TransitionError("Expecting answer, question or header")
+        raise TransitionError("Cần một câu trả lời, câu hỏi hoặc tiêu đề")
 
     return state
 
@@ -797,23 +1108,22 @@ def parse_file(md_script):
     :param md_script: list of file lines
 	:type md_script: list
     """
-
+    global error_message
     # Create Quiz
     quiz = Quiz()
 
     # Initialize state machine
-    m = StateMachine()
     
+    
+    m = StateMachine()
     m.add_state("start", state_start)
     m.add_state("parse_header", state_parse_header)
     m.add_state("parse_question", state_parse_question)
     m.add_state("parse_answer", state_parse_answer)
-    m.add_state("parse_feedback", state_feedback)
     m.add_state("parse_question_codeblock", state_parse_question_codeblock)
     m.add_state("end", state_end, end_state=1)
-
     m.set_start("start")
-
+    
     # Parse file lines
     md_lines = md_script.split(NEW_LINE)
     md_lines.append("EOF")
@@ -828,7 +1138,9 @@ def parse_file(md_script):
             line_number += 1
         
     except TransitionError as e:
-        print("Error at line %d: %s." % (line_number, e))
+        #print("Error at line %d: %s." % (line_number, e))
+        #error_message = r"Error in quiz file at line %d: %s." % (line_number, e)
+        error_message = r"Lỗi trong file quiz tại dòng %d: %s." % (line_number, e)
         quiz = None
 
     return quiz
@@ -838,28 +1150,4 @@ def parse_file(md_script):
 ######################################################################
 
 if __name__ == '__main__':
-    # very basic argument usage
-    if len(sys.argv) > 3:
-        print("Usage details: python md2moodle.py <md_file> [stdout]")
-        sys.exit()
-
-    try:
-        md_file_name = sys.argv[1]
-
-        md_file = open(md_file_name, 'r')
-        md_script = md_file.read()
-
-        quiz = parse_file(md_script)
-
-        if quiz:
-            if len(sys.argv) > 2:
-                #outputs to JSON containing the XML per section
-                xml = quiz.export_xml_to_string(md_file_name)
-                print(xml)
-            else:
-                #creates and outputs to XML files
-                quiz.export_xml_to_file(md_file_name)
-                print("XML file(s) successfully generated!")
-
-    except Exception as e:
-        print(e)
+    main()
