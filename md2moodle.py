@@ -124,7 +124,13 @@ TABLE_PATTERN = re.compile(r'\[\[\[(.*)\n([\s\S]+?)\]\]\]', re.MULTILINE )
 LIGHT_BG = "#ECF0F3"
 BUTTON_BG = "#3688D0"
 TEXT_FG = "#2272B7"
-icon_path = f"D:\VSCode\Text2QTI\QTIIcon.ico"
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.dirname(__file__)
+
+icon_path = os.path.join(base_path, "QTIIcon.ico")
 
 def main():
     
